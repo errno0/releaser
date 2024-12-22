@@ -42,16 +42,17 @@ SET CHANGELOG=
 PUSHD %PROJECT_DIR%
 IF NOT DEFINED LAST_HEAD (
     FOR /F "delims=" %%C IN ('git log -n 1 --pretty^=format:"  - %%s"') DO (
-        SET CHANGELOG=%%C
+        CALL :CLEAN_CL "%%C" CL
+        SET CHANGELOG=!CL!
     )
 ) ELSE (
     FOR /F "delims=" %%C IN ('git log !LAST_HEAD!..HEAD --pretty^=format:"  - %%s"') DO (
-        SET CHANGELOG=!CHANGELOG!%%C^&echo.
+        CALL :CLEAN_CL "%%C" CL
+        SET CHANGELOG=!CHANGELOG!!CL!^&echo.
     )
 )
 POPD
 EXIT /B 0
-
 
 :READ_CURRENT_HEAD
 PUSHD %PROJECT_DIR%
@@ -61,7 +62,24 @@ FOR /F "delims=" %%G IN ('git rev-parse HEAD') DO (
     EXIT /B 0
 )
 POPD
-EXIT /B 0
 
 ENDLOCAL
+EXIT /B 0
+
+:CLEAN_CL
+set "str1=%~1"
+
+for %%a in ( ! @ # $ % ^^ ^&  + \ / ^< ^>  . '  [ ] { }  ` ^| ^"  ) do (
+   set "str1=!str1:%%a=!"
+)
+
+set "str1=!str1:(=!"
+set "str1=!str1:)=!"
+set "str1=!str1:;=!"
+set "str1=!str1:,=!"
+set "str1=!str1:^^=!"
+set "str1=!str1:^~=!"
+
+SET %~2=!str1!
+
 EXIT /B 0
