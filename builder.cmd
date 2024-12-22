@@ -65,7 +65,6 @@ FOR %%F IN (%PROJECTS_DIR%\*.env) DO (
     git fetch --all
 
     FOR /F "tokens=*" %%b IN ('git branch -r ^| findstr /v "HEAD"') DO (
-        echo %%b
         SET BRANCH=%%~nb
         SET BUILD_BRANCH=0
         SET OUTDIR=release
@@ -172,10 +171,10 @@ CALL :SET_OUTPUT_PATH
 SET BUILD_VERSION=!CUR_VERSION!
 IF !DEV! == 1 (
     SET HEAD_HASH=!NEW_HEAD:~0,8!
-    SET BUILD_VERSION=!BUILD_VERSION! (!HEAD_HASH!)
+    SET BUILD_VERSION="!BUILD_VERSION:\"=! (!HEAD_HASH:\"=!)"
 )
 
-CALL %VERSION_CMD% "!BUILD_VERSION!" "!VERSION_FILE!"
+CALL %VERSION_CMD% !BUILD_VERSION:\"=! "!VERSION_FILE:\"=!"
 
 CALL "!MSVC_BAT!" !ARCH!
 
@@ -192,6 +191,7 @@ IF %ERRORLEVEL% NEQ 0 (
     xcopy /E /Y "!PROJECT_PATH!\!BIN_FOLDER!\*" "!OUTPUT_PATH!"
 
     xcopy /-I /Y "!BUILD_OUTPUT!" "!OUTPUT_PATH!\build.log"
+    xcopy /-I /Y "!VERSION_FILE:\"=!" "!OUTPUT_PATH!"
 
     FOR %%e IN (!EXTRA_DIRS!) DO (
         SET EXTRA=%~dp0\%%~e
