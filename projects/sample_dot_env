@@ -1,0 +1,15 @@
+PROJECT_NAME=Releaser Test
+PROJECT_PATH=C:\Users\keech\src\releaser_test
+PROJECT_SOLUTION="Releaser Test.sln"
+BUILD_CONFIG=Release
+BIN_FOLDER=x64\Release
+ARCH=x64
+GIT_REPO_URL=git@github.com:sanekee/releaser_test.git
+SSH_PRIVATE_KEY=C:\Users\keech\.ssh\id_sanekeegh
+MSVC_BAT=C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat
+INCLUDE_BRANCH=*
+EXCLUDE_BRANCH=00-test-exclude
+EXTRA_DIRS="extra1" "extra 2"
+VERSION_FILE=C:\Users\keech\src\releaser_test\currentversion.h
+PRE_BUILD_CMD="prebuild.cmd"
+POST_BUILD_CMD="postbuild.cmd"
