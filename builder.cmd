@@ -188,8 +188,8 @@ IF %ERRORLEVEL% NEQ 0 (
 
     xcopy /E /Y "!PROJECT_PATH!\!BIN_FOLDER!\*" "!OUTPUT_PATH!"
 
-    xcopy /-I /Y "!BUILD_OUTPUT!" "!OUTPUT_PATH!\build.log"
-    xcopy /-I /Y "!VERSION_FILE:\"=!" "!OUTPUT_PATH!"
+    copy "!BUILD_OUTPUT!" "!OUTPUT_PATH!\build.log"
+    copy "!VERSION_FILE:\"=!" "!OUTPUT_PATH!"
 
     FOR %%e IN (!EXTRA_DIRS!) DO (
         SET EXTRA=%~dp0\%%~e
