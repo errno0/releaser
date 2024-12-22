@@ -49,7 +49,6 @@ FOR %%F IN (%PROJECTS_DIR%\*.env) DO (
 
     IF NOT EXIST "!PROJECT_PATH!" (
         echo PROJECT_PATH does not exist. Cloning repository...
-        mkdir "!PROJECT_PATH!"
         git clone !GIT_REPO_URL! "!PROJECT_PATH!"
         IF %ERRORLEVEL% NEQ 0 (
             echo ERROR: Failed to clone repository from !GIT_REPO_URL!
@@ -96,6 +95,7 @@ FOR %%F IN (%PROJECTS_DIR%\*.env) DO (
         IF !BUILD_BRANCH! EQU 0 (
             echo Skipping branch: !BRANCH!
         ) ELSE (
+            git reset --hard
             git checkout !BRANCH! || git checkout -b !BRANCH! %%b
 
             FOR /F "tokens=*" %%h IN ('git rev-parse HEAD') DO SET CURRENT_HEAD=%%h
@@ -175,18 +175,23 @@ IF !DEV! == 1 (
     SET BUILD_VERSION=!BUILD_VERSION! (!HEAD_HASH!)
 )
 
-echo %VERSION_CMD% "!BUILD_VERSION!" "!VERSION_FILE!"
 CALL %VERSION_CMD% "!BUILD_VERSION!" "!VERSION_FILE!"
 
 CALL "!MSVC_BAT!" !ARCH!
-msbuild !PROJECT_SOLUTION! /p:Configuration=!BUILD_CONFIG! /m
+
+SET BUILD_OUTPUT=%TMP%\~%RANDOM%.tmp
+msbuild !PROJECT_SOLUTION! /p:Configuration=!BUILD_CONFIG! /m > !BUILD_OUTPUT! 2>&1
+
 IF %ERRORLEVEL% NEQ 0 (
-    echo Build failed for branch: !BRANCH! in project: !PROJECT_NAME!
+    echo Build failed for branch: !BRANCH! in project: !PROJECT_NAME!, output: !BUILD_OUTPUT!
+    TYPE %BUILD_OUTPUT%
 ) ELSE (
     
     mkdir "!OUTPUT_PATH!"
 
     xcopy /E /Y "!PROJECT_PATH!\!BIN_FOLDER!\*" "!OUTPUT_PATH!"
+
+    xcopy /-I /Y "!BUILD_OUTPUT!" "!OUTPUT_PATH!\build.log"
 
     FOR %%e IN (!EXTRA_DIRS!) DO (
         SET EXTRA=%~dp0\%%~e
@@ -195,7 +200,6 @@ IF %ERRORLEVEL% NEQ 0 (
     
     copy NUL "!OUTPUT_PATH!\!NEW_HEAD!"
 
-    echo "%CHANGELOG_CMD%" "!LAST_OUTPUT_PATH!\version.txt" "!CUR_VERSION!" "!OUTPUT_PATH!\version.txt" !PROJECT_PATH!
     CALL "%CHANGELOG_CMD%" "!LAST_OUTPUT_PATH!\version.txt" "!CUR_VERSION!" "!OUTPUT_PATH!\version.txt" !PROJECT_PATH!
 
     IF DEFINED POST_BUILD_CMD (

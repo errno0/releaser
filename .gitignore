@@ -1,3 +1,4 @@
 release
 testing
 projects/*.env
+.env
