@@ -69,17 +69,19 @@ FOR %%F IN (%PROJECTS_DIR%\*.env) DO (
         echo %%b
         SET BRANCH=%%~nb
         SET BUILD_BRANCH=0
-        SET OUTDIR=testing\!BRANCH!
+        SET OUTDIR=release
         SET DEV=1
 
         IF "!BRANCH!" == "main" (
-            SET OUTDIR=release
             SET DEV=0
         )
 
         IF "!BRANCH!" == "master" (
-            SET OUTDIR=release
             SET DEV=0
+        )
+
+        IF !DEV! EQU 1 (
+            SET OUTDIR=testing
         )
 
         IF "!INCLUDE_BRANCH!" == "*" SET BUILD_BRANCH=1
@@ -102,10 +104,21 @@ FOR %%F IN (%PROJECTS_DIR%\*.env) DO (
             SET NEW_HEAD=
             FOR /F "tokens=*" %%h IN ('git rev-parse HEAD') DO SET NEW_HEAD=%%h
 
+            SET SKIPBUILD=0
+
             IF "!CURRENT_HEAD!" == "!NEW_HEAD!" (
                 echo No new changes in branch: !BRANCH!
-            ) ELSE (
-                echo New changes detected in branch: !BRANCH! !MSVC_BAT! !ARCH!
+                SET SKIPBUILD=1
+            )
+
+            CALL :GET_LAST_RELEASE
+            IF NOT DEFINED LAST_OUTPUT_PATH (
+                echo "No last build found"
+                SET SKIPBUILD=0
+            )
+                
+            IF !SKIPBUILD! EQU 0 (
+                echo Building !PROJECT_NAME! branch: !BRANCH!
                 CALL :BUILD_MSVC
             )
         )
@@ -115,10 +128,16 @@ FOR %%F IN (%PROJECTS_DIR%\*.env) DO (
 EXIT /B /0
 
 :GET_LAST_RELEASE
-FOR /F "delims=" %%D IN ('DIR /B /AD /O-D "%BUILD_OUTPUT_BASE%\!OUTDIR!\!PROJECT_NAME!\*"') DO (
-    SET LAST_OUTPUT_PATH=%BUILD_OUTPUT_BASE%\!OUTDIR!\!PROJECT_NAME!\%%D
+SET LAST_BASE=%BUILD_OUTPUT_BASE%\!OUTDIR!\!PROJECT_NAME!
+iF !DEV! EQU 1 (
+    SET LAST_BASE=%BUILD_OUTPUT_BASE%\!OUTDIR!\!PROJECT_NAME!\!BRANCH!
+)
+
+FOR /F "delims=" %%D IN ('DIR /B /AD /O-D "!LAST_BASE!\*"') DO (
+    SET LAST_OUTPUT_PATH=!LAST_BASE!\%%D
     EXIT /B 0
 )
+EXIT /B 0
 
 
 :SET_OUTPUT_PATH
@@ -128,6 +147,11 @@ SET DATE_TAG=%DATE:~12,2%%DATE:~7,2%%DATE:~4,2%
 FOR /L %%I IN (2,1,99) DO (
     SET CUR_VERSION=v!DATE_TAG!-!BUILD_COUNT!
     SET OUTPUT_PATH=%BUILD_OUTPUT_BASE%\!OUTDIR!\!PROJECT_NAME!\!CUR_VERSION!
+
+    IF !DEV! EQU 1 (
+        SET OUTPUT_PATH=%BUILD_OUTPUT_BASE%\!OUTDIR!\!PROJECT_NAME!\!BRANCH!\!CUR_VERSION!
+        
+    )
 
     IF NOT EXIST "!OUTPUT_PATH!" (
         EXIT /B 0

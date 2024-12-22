@@ -46,9 +46,8 @@ IF NOT DEFINED LAST_HEAD (
     )
 ) ELSE (
     FOR /F "delims=" %%C IN ('git log !LAST_HEAD!..HEAD --pretty^=format:"  - %%s"') DO (
-        SET CHANGELOG=!CHANGELOG!%%C;
+        SET CHANGELOG=!CHANGELOG!%%C^&echo.
     )
-    SET CHANGELOG=!CHANGELOG:;=^&echo.!
 )
 POPD
 EXIT /B 0
