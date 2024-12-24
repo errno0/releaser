@@ -142,7 +142,8 @@ EXIT /B 0
 
 :SET_OUTPUT_PATH
 SET BUILD_COUNT=1
-SET DATE_TAG=%DATE:~12,2%%DATE:~7,2%%DATE:~4,2%
+
+FOR /f %%a in ('powershell -Command "Get-date -format yyMMdd"') do set DATE_TAG=%%a
 
 FOR /L %%I IN (2,1,99) DO (
     SET CUR_VERSION=v!DATE_TAG!-!BUILD_COUNT!
