@@ -67,7 +67,7 @@ FOR %%F IN (%PROJECTS_DIR%\*.env) DO (
     FOR /F "tokens=*" %%b IN ('git branch -r ^| findstr /v "HEAD"') DO (
         SET BRANCH=%%~nb
         SET BUILD_BRANCH=0
-        SET OUTDIR=release
+        SET BUILD_OUTDIR=release
         SET DEV=1
 
         IF "!BRANCH!" == "main" (
@@ -79,7 +79,7 @@ FOR %%F IN (%PROJECTS_DIR%\*.env) DO (
         )
 
         IF !DEV! EQU 1 (
-            SET OUTDIR=testing
+            SET BUILD_OUTDIR=testing
         )
 
         IF "!INCLUDE_BRANCH!" == "*" SET BUILD_BRANCH=1
@@ -97,7 +97,7 @@ FOR %%F IN (%PROJECTS_DIR%\*.env) DO (
             git reset --hard
             git checkout !BRANCH! || git checkout -b !BRANCH! %%b
 
-            FOR /F "tokens=*" %%h IN ('git rev-parse HEAD') DO SET CURRENT_HEAD=%%h
+            CALL :GET_LAST_RELEASE
 
             git pull origin !BRANCH!
             SET NEW_HEAD=
@@ -105,17 +105,11 @@ FOR %%F IN (%PROJECTS_DIR%\*.env) DO (
 
             SET SKIPBUILD=0
 
-            IF "!CURRENT_HEAD!" == "!NEW_HEAD!" (
+            IF "!LAST_HEAD!" == "!NEW_HEAD!" (
                 echo No new changes in branch: !BRANCH!
                 SET SKIPBUILD=1
             )
 
-            CALL :GET_LAST_RELEASE
-            IF NOT DEFINED LAST_OUTPUT_PATH (
-                echo "No last build found"
-                SET SKIPBUILD=0
-            )
-                
             IF !SKIPBUILD! EQU 0 (
                 echo Building !PROJECT_NAME! branch: !BRANCH!
                 CALL :BUILD_MSVC
@@ -127,17 +121,53 @@ FOR %%F IN (%PROJECTS_DIR%\*.env) DO (
 EXIT /B /0
 
 :GET_LAST_RELEASE
-SET LAST_BASE=%BUILD_OUTPUT_BASE%\!OUTDIR!\!PROJECT_NAME!
-SET LAST_OUTPUT_PATH=
+
+SET LAST_BASE=%BUILD_OUTPUT_BASE%\!BUILD_OUTDIR!\!PROJECT_NAME!
 iF !DEV! EQU 1 (
-    SET LAST_BASE=%BUILD_OUTPUT_BASE%\!OUTDIR!\!PROJECT_NAME!\!BRANCH!
+    SET LAST_BASE=%BUILD_OUTPUT_BASE%\!BUILD_OUTDIR!\!PROJECT_NAME!\!BRANCH!
 )
 
-FOR /F "delims=" %%D IN ('DIR /B /AD /O-D "!LAST_BASE!\*"') DO (
-    SET LAST_OUTPUT_PATH=!LAST_BASE!\%%D
+CALL :GET_LAST_OUTPUT_PATH
+CALL :GET_LAST_HEAD
+CALL :GET_LAST_BUILD_OUTPUT_PATH
+
+:GET_LAST_HEAD
+SET LAST_HEAD=
+
+IF NOT DEFINED LAST_OUTPUT_PATH (
     EXIT /B 0
 )
+
+SET HEAD_FILE="!LAST_OUTPUT_PATH!\HEAD"
+
+FOR /F "delims=" %%A IN ('TYPE !HEAD_FILE!') DO (
+        CALL :TRIM_INPUT %%A LAST_HEAD
+        EXIT /B 0
+)
 EXIT /B 0
+
+:GET_LAST_OUTPUT_PATH
+SET LAST_OUTPUT_PATH=
+
+FOR /F "delims=" %%D IN ('DIR /B /AD /O-D "!LAST_BASE!\*"') DO (
+    IF EXIST !LAST_BASE!\%%D\HEAD (
+        SET LAST_OUTPUT_PATH=!LAST_BASE!\%%D
+        EXIT /B 0
+    )
+)
+EXIT /B 0
+
+:GET_LAST_BUILD_OUTPUT_PATH
+SET LAST_BUILD_OUTPUT_PATH=
+
+FOR /F "delims=" %%D IN ('DIR /B /AD /O-D "!LAST_BASE!\*"') DO (
+    IF EXIST !LAST_BASE!\%%D\version.txt (
+        SET LAST_BUILD_OUTPUT_PATH=!LAST_BASE!\%%D
+        EXIT /B 0
+    )
+)
+EXIT /B 0
+
 
 
 :SET_OUTPUT_PATH
@@ -147,10 +177,10 @@ FOR /f %%a in ('powershell -Command "Get-date -format yyMMdd"') do set DATE_TAG=
 
 FOR /L %%I IN (2,1,99) DO (
     SET CUR_VERSION=v!DATE_TAG!-!BUILD_COUNT!
-    SET OUTPUT_PATH=%BUILD_OUTPUT_BASE%\!OUTDIR!\!PROJECT_NAME!\!CUR_VERSION!
+    SET OUTPUT_PATH=%BUILD_OUTPUT_BASE%\!BUILD_OUTDIR!\!PROJECT_NAME!\!CUR_VERSION!
 
     IF !DEV! EQU 1 (
-        SET OUTPUT_PATH=%BUILD_OUTPUT_BASE%\!OUTDIR!\!PROJECT_NAME!\!BRANCH!\!CUR_VERSION!
+        SET OUTPUT_PATH=%BUILD_OUTPUT_BASE%\!BUILD_OUTDIR!\!PROJECT_NAME!\!BRANCH!\!CUR_VERSION!
     )
 
     IF NOT EXIST "!OUTPUT_PATH!" (
@@ -166,9 +196,7 @@ IF DEFINED PRE_BUILD_CMD (
     CALL "!PRE_BUILD_CMD:\"=!"
 )
 
-CALL :GET_LAST_RELEASE
 CALL :SET_OUTPUT_PATH
-
 
 SET BUILD_VERSION=!CUR_VERSION!
 IF !DEV! == 1 (
@@ -181,18 +209,23 @@ CALL %VERSION_CMD% !BUILD_VERSION:\"=! "!VERSION_FILE:\"=!"
 CALL "!MSVC_BAT!" !ARCH!
 
 SET BUILD_OUTPUT=%TMP%\~%RANDOM%.tmp
-msbuild !PROJECT_SOLUTION! /p:Configuration=!BUILD_CONFIG! /m > !BUILD_OUTPUT! 2>&1
+CALL "!MSBUILD!" !PROJECT_SOLUTION! /p:Configuration=!BUILD_CONFIG! /m > !BUILD_OUTPUT! 2>&1
 
 IF %ERRORLEVEL% NEQ 0 (
     echo Build failed for branch: !BRANCH! in project: !PROJECT_NAME!, output: !BUILD_OUTPUT!
     TYPE %BUILD_OUTPUT%
-) ELSE (
-    
+
     mkdir "!OUTPUT_PATH!"
+    copy "!BUILD_OUTPUT!" "!OUTPUT_PATH!\error.log"
+    echo !NEW_HEAD! > "!OUTPUT_PATH!\HEAD"
+
+) ELSE (
+    mkdir "!OUTPUT_PATH!"
+    copy "!BUILD_OUTPUT!" "!OUTPUT_PATH!\build.log"
+    echo !NEW_HEAD! > "!OUTPUT_PATH!\HEAD"
 
     xcopy /E /Y "!PROJECT_PATH!\!BIN_FOLDER!\*" "!OUTPUT_PATH!"
 
-    copy "!BUILD_OUTPUT!" "!OUTPUT_PATH!\build.log"
     copy "!VERSION_FILE:\"=!" "!OUTPUT_PATH!"
 
     FOR %%e IN (!EXTRA_DIRS!) DO (
@@ -200,9 +233,8 @@ IF %ERRORLEVEL% NEQ 0 (
         xcopy /E /Y "!EXTRA!\*" "!OUTPUT_PATH!"
     )
     
-    copy NUL "!OUTPUT_PATH!\!NEW_HEAD!"
 
-    CALL "%CHANGELOG_CMD%" "!LAST_OUTPUT_PATH!\version.txt" "!CUR_VERSION!" "!OUTPUT_PATH!\version.txt" !PROJECT_PATH!
+    CALL "%CHANGELOG_CMD%" "!LAST_BUILD_OUTPUT_PATH!\version.txt" "!CUR_VERSION!" "!OUTPUT_PATH!\version.txt" !PROJECT_PATH!
 
     IF DEFINED POST_BUILD_CMD (
         CALL "!POST_BUILD_CMD:"=!"
@@ -211,3 +243,9 @@ IF %ERRORLEVEL% NEQ 0 (
     echo Build successful. Outputs copied to "!OUTPUT_PATH!"
 )
 EXIT /B 0
+
+:TRIM_INPUT
+set "str1=%~1"
+FOR /F "tokens=* delims=" %%A IN ("!str1!") DO SET str2=%%A
+
+SET %~2=!str2!
