@@ -62,7 +62,7 @@ FOR %%F IN (%PROJECTS_DIR%\*.env) DO (
         EXIT /B 1
     )
 
-    git fetch --all
+    git fetch --all --prune
 
     FOR /F "tokens=*" %%b IN ('git branch -r ^| findstr /v "HEAD"') DO (
         SET BRANCH=%%~nb
