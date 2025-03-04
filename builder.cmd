@@ -9,6 +9,9 @@ SET BUILD_OUTPUT_BASE=%SCRIPT_DIR%
 SET CHANGELOG_CMD=%SCRIPT_DIR%changelog.cmd
 SET VERSION_CMD=%SCRIPT_DIR%createversion.cmd
 
+for /f "tokens=2 delims==" %%I in ('wmic os get localdatetime /value') do set datetime=%%I
+set "LOGFILE=%TEMP%\build-%datetime:~0,14%.log"
+
 IF EXIST %GLOBAL_ENV_FILE% (
     FOR /F "tokens=1,2 delims==" %%A IN (%GLOBAL_ENV_FILE%) DO (
         SET %%A=%%B
@@ -62,6 +65,10 @@ FOR %%F IN (%PROJECTS_DIR%\*.env) DO (
         EXIT /B 1
     )
 
+    IF DEFINED PRE_BUILD_CMD (
+        CALL "!PRE_BUILD_CMD:\"=!"
+    )
+
     git fetch --all --prune
 
     FOR /F "tokens=*" %%b IN ('git branch -r ^| findstr /v "HEAD"') DO (
@@ -113,10 +120,14 @@ FOR %%F IN (%PROJECTS_DIR%\*.env) DO (
             IF !SKIPBUILD! EQU 0 (
                 echo Building !PROJECT_NAME! branch: !BRANCH!
                 CALL :BUILD_MSVC
+                echo Build: !OUTPUT_PATH! >> "%LOGFILE%"
             )
         )
     )
 )
+
+echo Build Summary:
+type %LOGFILE%
 
 EXIT /B /0
 
@@ -192,10 +203,6 @@ FOR /L %%I IN (2,1,99) DO (
 EXIT /B 0
 
 :BUILD_MSVC
-IF DEFINED PRE_BUILD_CMD (
-    CALL "!PRE_BUILD_CMD:\"=!"
-)
-
 CALL :SET_OUTPUT_PATH
 
 SET BUILD_VERSION=!CUR_VERSION!
